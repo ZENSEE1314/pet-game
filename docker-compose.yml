@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: petquest-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: petquest
+      POSTGRES_PASSWORD: petquest
+      POSTGRES_DB: petquest
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # The app must not start migrating against a Postgres that is still booting.
+      test: ['CMD-SHELL', 'pg_isready -U petquest -d petquest']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: petquest-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: petquest-app
+    restart: unless-stopped
+    # `profiles` keeps the app container out of the default `docker compose up`.
+    # In development you want Postgres and Redis in Docker but Next.js on the host,
+    # where hot reload actually works. Run `docker compose --profile full up` to get
+    # the whole stack containerised.
+    profiles: ['full']
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://petquest:petquest@postgres:5432/petquest?schema=public
+      REDIS_URL: redis://redis:6379
+      AUTH_SECRET: ${AUTH_SECRET:-dev-only-auth-secret-change-me-0123456789abcd}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      GAME_SESSION_SECRET: ${GAME_SESSION_SECRET:-dev-only-game-session-secret-change-me-0123456789}
+      QR_TOKEN_SECRET: ${QR_TOKEN_SECRET:-dev-only-qr-token-secret-change-me-0123456789abcd}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:-Asia/Kuala_Lumpur}
+      NODE_ENV: production
+    ports:
+      - '3000:3000'
+
+volumes:
+  postgres-data:
+  redis-data:

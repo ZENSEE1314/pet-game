@@ -1,0 +1,128 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 250 100% 99%;
+    --foreground: 250 30% 16%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 250 30% 16%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 250 30% 16%;
+
+    /* A friendly violet — playful without tipping into "children's toy". */
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 260 60% 96%;
+    --secondary-foreground: 262 60% 30%;
+
+    --muted: 250 30% 96%;
+    --muted-foreground: 250 12% 46%;
+
+    --accent: 174 72% 45%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 78% 58%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 250 25% 90%;
+    --input: 250 25% 90%;
+    --ring: 262 83% 58%;
+
+    --radius: 1rem;
+  }
+
+  .dark {
+    --background: 250 30% 8%;
+    --foreground: 250 20% 96%;
+
+    --card: 250 28% 12%;
+    --card-foreground: 250 20% 96%;
+
+    --popover: 250 28% 12%;
+    --popover-foreground: 250 20% 96%;
+
+    --primary: 262 83% 68%;
+    --primary-foreground: 250 30% 10%;
+
+    --secondary: 250 24% 18%;
+    --secondary-foreground: 250 20% 92%;
+
+    --muted: 250 24% 18%;
+    --muted-foreground: 250 12% 62%;
+
+    --accent: 174 62% 48%;
+    --accent-foreground: 250 30% 10%;
+
+    --destructive: 0 68% 52%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 250 20% 22%;
+    --input: 250 20% 22%;
+    --ring: 262 83% 68%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+  }
+
+  /* Large touch targets on mobile — a 44px minimum is the accessibility floor. */
+  @media (pointer: coarse) {
+    button,
+    a[role='button'],
+    [role='tab'] {
+      min-height: 44px;
+    }
+  }
+}
+
+@layer components {
+  .pq-gradient {
+    background-image: linear-gradient(135deg, hsl(262 83% 58%), hsl(288 80% 62%), hsl(174 72% 45%));
+  }
+
+  .pq-card {
+    @apply rounded-2xl border bg-card shadow-sm;
+  }
+
+  /* One shared shimmer for every skeleton, so loading states feel like one system. */
+  .pq-skeleton {
+    @apply relative overflow-hidden rounded-lg bg-muted;
+  }
+
+  .pq-skeleton::after {
+    @apply absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/40 to-transparent;
+    content: '';
+  }
+
+  .dark .pq-skeleton::after {
+    @apply via-white/10;
+  }
+}
+
+/* Phaser injects a raw <canvas>; without this it ignores its container's radius. */
+canvas {
+  @apply rounded-xl;
+  touch-action: none;
+}
+
+/* Respect the user's motion preference. Reward celebrations are delightful; making
+   someone motion-sick is not. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

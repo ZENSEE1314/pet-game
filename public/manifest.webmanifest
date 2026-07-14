@@ -1,0 +1,25 @@
+{
+  "name": "PetQuest Rewards",
+  "short_name": "PetQuest",
+  "description": "Adopt a virtual pet, play mini games, complete missions and redeem real rewards.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#8b5cf6",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {
+      "src": "/assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    { "name": "My Pet", "url": "/pet", "description": "Care for your pet" },
+    { "name": "Mini Games", "url": "/games", "description": "Play and earn" },
+    { "name": "Rewards", "url": "/rewards", "description": "Spend your points" }
+  ]
+}

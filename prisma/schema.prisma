@@ -1,0 +1,1423 @@
+// PetQuest Rewards — data model
+//
+// Invariants encoded here that the application MUST NOT violate:
+//   * CurrencyTransaction is append-only. There is no update path in the codebase.
+//   * CurrencyBalance is a cached projection of the ledger, written only by the
+//     transaction service, only inside a DB transaction, only alongside a ledger row.
+//   * idempotencyKey is globally unique — that unique index IS the double-spend guard.
+//   * Money is Int. Never Float, never Decimal-with-fractional-cents. Whole units only.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  PLAYER
+  STAFF
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+  PENDING_VERIFICATION
+}
+
+enum PermissionKey {
+  ADJUST_BALANCE
+  MANAGE_USERS
+  MANAGE_REWARDS
+  MANAGE_MISSIONS
+  MANAGE_GAMES
+  MANAGE_ITEMS
+  APPROVE_CLAIMS
+  SCAN_CLAIMS
+  VIEW_ANALYTICS
+  VIEW_AUDIT_LOG
+  MANAGE_ROLES
+  MANAGE_SETTINGS
+  REVIEW_FRAUD
+  SEND_ANNOUNCEMENTS
+  MANAGE_PROMO_CODES
+}
+
+enum CurrencyType {
+  COINS
+  REWARD_POINTS
+  GEMS
+}
+
+enum TransactionDirection {
+  CREDIT
+  DEBIT
+}
+
+enum TransactionCategory {
+  PET_CARE
+  DAILY_CARE_BONUS
+  GAME_REWARD
+  MISSION_REWARD
+  ACHIEVEMENT_REWARD
+  LOGIN_STREAK
+  REFERRAL_REWARD
+  PROMO_CODE
+  EVENT_REWARD
+  LEADERBOARD_PRIZE
+  ITEM_PURCHASE
+  REWARD_REDEMPTION
+  REWARD_REFUND
+  ADMIN_ADJUSTMENT
+  SIGNUP_BONUS
+  GAME_ENERGY_REFILL
+}
+
+enum PetStage {
+  EGG
+  BABY
+  YOUNG
+  ADULT
+  EVOLVED
+}
+
+enum PetHealthState {
+  HEALTHY
+  TIRED
+  SICK
+}
+
+enum PetCareAction {
+  FEED
+  BATHE
+  PLAY
+  SLEEP
+  MEDICINE
+}
+
+enum ItemCategory {
+  FOOD
+  MEDICINE
+  CLOTHING
+  DECORATION
+  GAME_TICKET
+  EVOLUTION_ITEM
+  EVENT_ITEM
+  COLLECTIBLE
+}
+
+enum ItemRarity {
+  COMMON
+  UNCOMMON
+  RARE
+  EPIC
+  LEGENDARY
+}
+
+enum AcquisitionSource {
+  SHOP_PURCHASE
+  MISSION_REWARD
+  ACHIEVEMENT_REWARD
+  PROMO_CODE
+  ADMIN_GRANT
+  EVENT
+  STARTER_PACK
+}
+
+enum GameSlug {
+  ENDLESS_RUNNER
+  FEEDING_CATCH
+}
+
+enum GameSessionStatus {
+  ACTIVE
+  COMPLETED
+  ABANDONED
+  REJECTED
+}
+
+enum MissionType {
+  DAILY_LOGIN
+  FEED_PET
+  BATHE_PET
+  PLAY_WITH_PET
+  COMPLETE_DAILY_CARE
+  PLAY_MINI_GAME
+  PLAY_GAME_COUNT
+  REACH_SCORE
+  EARN_COINS
+  VISIT_REWARD_SHOP
+  REDEEM_REWARD
+  LOGIN_STREAK
+  USE_ITEM
+  ENTER_PROMO_CODE
+}
+
+enum MissionFrequency {
+  DAILY
+  WEEKLY
+  ONE_TIME
+}
+
+enum RewardType {
+  COINS
+  REWARD_POINTS
+  GEMS
+  ITEM
+  BADGE
+  TITLE
+  XP
+}
+
+enum UserMissionStatus {
+  IN_PROGRESS
+  COMPLETED
+  CLAIMED
+  EXPIRED
+}
+
+enum AchievementCode {
+  ADOPT_FIRST_PET
+  FIRST_CARE_ACTION
+  SEVEN_DAY_STREAK
+  FEED_100_TIMES
+  PLAY_100_GAMES
+  REACH_LEVEL_10
+  EARN_10000_COINS
+  FIRST_REDEMPTION
+  TOP_100_LEADERBOARD
+  EVOLVE_PET
+}
+
+enum RewardCategory {
+  DIGITAL_VOUCHER
+  DISCOUNT_COUPON
+  FOOD_AND_DRINK
+  TOY
+  MERCHANDISE
+  FREE_GAME_ATTEMPT
+  EVENT_TICKET
+  LIMITED_EDITION
+}
+
+enum CollectionMethod {
+  DIGITAL_CODE
+  PHYSICAL_COLLECTION
+  DELIVERY
+}
+
+enum ClaimStatus {
+  PENDING
+  RESERVED
+  READY
+  COLLECTED
+  DELIVERED
+  CANCELLED
+  EXPIRED
+  REJECTED
+}
+
+enum StockMovement {
+  RESTOCK
+  RESERVE
+  RELEASE
+  FULFIL
+  ADMIN_ADJUSTMENT
+}
+
+enum ReferralStatus {
+  PENDING
+  QUALIFIED
+  REWARDED
+  REJECTED
+}
+
+enum LeaderboardPeriod {
+  DAILY
+  WEEKLY
+  MONTHLY
+  ALL_TIME
+}
+
+enum LeaderboardScope {
+  GLOBAL_XP
+  GLOBAL_COINS
+  PER_GAME
+}
+
+enum NotificationType {
+  MISSION_COMPLETED
+  MISSION_REWARD_AVAILABLE
+  PET_HUNGRY
+  PET_SICK
+  PET_ENERGY_RESTORED
+  CLAIM_READY
+  CLAIM_EXPIRING
+  CLAIM_COLLECTED
+  NEW_EVENT
+  LEADERBOARD_RESULT
+  ACHIEVEMENT_UNLOCKED
+  ADMIN_ANNOUNCEMENT
+  POINT_CAP_REACHED
+  REFERRAL_QUALIFIED
+  LEVEL_UP
+}
+
+enum FraudAlertType {
+  IMPOSSIBLE_SCORE
+  GAME_TOO_FAST
+  DUPLICATE_SUBMISSION
+  REUSED_SESSION
+  RATE_LIMIT_ABUSE
+  SHARED_IDENTIFIER
+  EXCESSIVE_REFERRALS
+  REPEATED_QR_FAILURE
+  ABNORMAL_POINT_EARNING
+  SELF_REFERRAL_ATTEMPT
+}
+
+enum FraudSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum FraudAlertStatus {
+  OPEN
+  REVIEWING
+  RESOLVED_LEGITIMATE
+  RESOLVED_ABUSE
+}
+
+enum AuditAction {
+  ADMIN_LOGIN
+  USER_SUSPENDED
+  USER_REACTIVATED
+  BALANCE_ADJUSTED
+  REWARD_CREATED
+  REWARD_UPDATED
+  STOCK_ADJUSTED
+  CLAIM_APPROVED
+  CLAIM_CANCELLED
+  CLAIM_COLLECTED
+  ROLE_CHANGED
+  PERMISSION_GRANTED
+  PERMISSION_REVOKED
+  SETTING_CHANGED
+  MISSION_CREATED
+  MISSION_UPDATED
+  GAME_CONFIG_UPDATED
+  PROMO_CODE_CREATED
+  ANNOUNCEMENT_SENT
+  FRAUD_ALERT_RESOLVED
+}
+
+// ---------------------------------------------------------------------------
+// Auth (Auth.js compatible)
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String        @id @default(cuid())
+  email         String        @unique
+  emailVerified DateTime?
+  passwordHash  String?
+  name          String?
+  image         String?
+  role          Role          @default(PLAYER)
+  status        AccountStatus @default(ACTIVE)
+
+  suspendedAt     DateTime?
+  suspendedReason String?
+  lastLoginAt     DateTime?
+  lastLoginIp     String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  accounts           Account[]
+  sessions           Session[]
+  profile            Profile?
+  permissions        UserPermission[]
+  pets               Pet[]
+  petActivities      PetActivity[]
+  inventory          UserInventory[]
+  balances           CurrencyBalance[]
+  transactions       CurrencyTransaction[] @relation("TransactionOwner")
+  actedTransactions  CurrencyTransaction[] @relation("TransactionActor")
+  gameSessions       GameSession[]
+  gameScores         GameScore[]
+  gameAttempts       GameAttempt[]
+  missions           UserMission[]
+  achievements       UserAchievement[]
+  claims             RewardClaim[]         @relation("ClaimOwner")
+  processedClaims    RewardClaim[]         @relation("ClaimProcessor")
+  promoRedemptions   PromoCodeRedemption[]
+  referralsMade      Referral[]            @relation("Referrer")
+  referralReceived   Referral?             @relation("Referred")
+  loginStreak        LoginStreak?
+  leaderboardEntries LeaderboardEntry[]
+  notifications      Notification[]
+  fraudAlerts        FraudAlert[]          @relation("FraudSubject")
+  resolvedAlerts     FraudAlert[]          @relation("FraudResolver")
+  auditLogs          AuditLog[]            @relation("AuditActor")
+  announcements      Announcement[]
+  stockTransactions  RewardStockTransaction[]
+
+  @@index([role, status])
+  @@index([createdAt])
+  @@index([status])
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  // EMAIL_VERIFICATION | PASSWORD_RESET — one table, two purposes, disambiguated here.
+  purpose    String   @default("EMAIL_VERIFICATION")
+  createdAt  DateTime @default(now())
+
+  @@unique([identifier, token])
+  @@index([identifier, purpose])
+  @@map("verification_tokens")
+}
+
+model UserPermission {
+  id         String        @id @default(cuid())
+  userId     String
+  permission PermissionKey
+  grantedBy  String?
+  grantedAt  DateTime      @default(now())
+  expiresAt  DateTime?
+  reason     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permission])
+  @@index([permission])
+  @@map("user_permissions")
+}
+
+// Reference tables so an admin UI can enumerate roles/permissions without
+// hard-coding the enum in the frontend bundle.
+model RolePermission {
+  id         String        @id @default(cuid())
+  role       Role
+  permission PermissionKey
+
+  @@unique([role, permission])
+  @@map("role_permissions")
+}
+
+model Permission {
+  key         PermissionKey @id
+  label       String
+  description String
+
+  @@map("permissions")
+}
+
+// ---------------------------------------------------------------------------
+// Profile
+// ---------------------------------------------------------------------------
+
+model Profile {
+  id           String  @id @default(cuid())
+  userId       String  @unique
+  username     String  @unique
+  displayName  String
+  avatarUrl    String?
+  phone        String?
+  country      String?
+  timezone     String  @default("Asia/Kuala_Lumpur")
+  bio          String?
+
+  level     Int @default(1)
+  xp        Int @default(0)
+
+  // Game energy: regenerated lazily from `energyUpdatedAt`, never by a cron.
+  gameEnergy          Int      @default(10)
+  gameEnergyUpdatedAt DateTime @default(now())
+  lastFreeRefillAt    DateTime?
+
+  referralCode String  @unique
+  referredBy   String?
+
+  notifyMissions     Boolean @default(true)
+  notifyPetCare      Boolean @default(true)
+  notifyRewards      Boolean @default(true)
+  notifyAnnouncements Boolean @default(true)
+
+  visitedRewardShopAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([level])
+  @@index([referralCode])
+  @@map("profiles")
+}
+
+// ---------------------------------------------------------------------------
+// Pets
+// ---------------------------------------------------------------------------
+
+model PetSpecies {
+  id          String  @id @default(cuid())
+  slug        String  @unique
+  name        String
+  description String
+  imageUrl    String
+  isStarter   Boolean @default(false)
+  isActive    Boolean @default(true)
+
+  // Per-hour decay rates. Positive number = points lost per hour.
+  hungerDecayPerHour      Int @default(4)
+  cleanlinessDecayPerHour Int @default(3)
+  happinessDecayPerHour   Int @default(2)
+  energyDecayPerHour      Int @default(1)
+  energyRegenPerHour      Int @default(12)
+  healthDecayPerHour      Int @default(2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pets       Pet[]
+  evolutions PetEvolution[]
+
+  @@map("pet_species")
+}
+
+model Pet {
+  id        String @id @default(cuid())
+  userId    String
+  speciesId String
+
+  name  String
+  stage PetStage @default(BABY)
+  level Int      @default(1)
+  xp    Int      @default(0)
+
+  // 0..100, all of them. Enforced by clamping in services/pet.
+  hunger      Int @default(70)
+  happiness   Int @default(70)
+  energy      Int @default(80)
+  cleanliness Int @default(80)
+  health      Int @default(100)
+  friendship  Int @default(10)
+
+  healthState PetHealthState @default(HEALTHY)
+  isSleeping  Boolean        @default(false)
+
+  totalCareActions Int @default(0)
+  totalFeeds       Int @default(0)
+
+  bornAt          DateTime  @default(now())
+  lastFedAt       DateTime?
+  lastBathedAt    DateTime?
+  lastPlayedAt    DateTime?
+  lastSleptAt     DateTime?
+  lastMedicatedAt DateTime?
+  // Watermark for lazy decay: stats are correct *as of* this instant.
+  statsUpdatedAt  DateTime  @default(now())
+  lastDailyCareAt DateTime?
+
+  equippedItemId String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  species    PetSpecies    @relation(fields: [speciesId], references: [id])
+  activities PetActivity[]
+
+  @@index([userId])
+  @@index([speciesId])
+  @@map("pets")
+}
+
+model PetActivity {
+  id     String        @id @default(cuid())
+  petId  String
+  userId String
+  action PetCareAction
+
+  hungerDelta      Int @default(0)
+  happinessDelta   Int @default(0)
+  energyDelta      Int @default(0)
+  cleanlinessDelta Int @default(0)
+  healthDelta      Int @default(0)
+  friendshipDelta  Int @default(0)
+
+  coinsAwarded Int @default(0)
+  xpAwarded    Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  pet  Pet  @relation(fields: [petId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([petId, createdAt])
+  @@index([userId, action, createdAt])
+  @@map("pet_activities")
+}
+
+model PetEvolution {
+  id        String   @id @default(cuid())
+  speciesId String
+  fromStage PetStage
+  toStage   PetStage
+
+  minLevel          Int     @default(1)
+  minAgeHours       Int     @default(0)
+  minFriendship     Int     @default(0)
+  minCareActions    Int     @default(0)
+  requiredItemId    String?
+  requiredAchievement AchievementCode?
+
+  // Reserved for branching paths (e.g. "fire" vs "water" line). One row per branch.
+  branchKey String  @default("default")
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  species PetSpecies @relation(fields: [speciesId], references: [id], onDelete: Cascade)
+  item    Item?      @relation(fields: [requiredItemId], references: [id])
+
+  @@unique([speciesId, fromStage, branchKey])
+  @@map("pet_evolutions")
+}
+
+// ---------------------------------------------------------------------------
+// Items & inventory
+// ---------------------------------------------------------------------------
+
+model Item {
+  id          String       @id @default(cuid())
+  slug        String       @unique
+  name        String
+  description String
+  category    ItemCategory
+  rarity      ItemRarity   @default(COMMON)
+  imageUrl    String
+
+  coinPrice Int?
+  gemPrice  Int?
+
+  isStackable Boolean @default(true)
+  maxStack    Int     @default(99)
+  isActive    Boolean @default(true)
+
+  // Effects applied when the item is consumed. All optional.
+  hungerRestore      Int @default(0)
+  happinessRestore   Int @default(0)
+  energyRestore      Int @default(0)
+  cleanlinessRestore Int @default(0)
+  healthRestore      Int @default(0)
+  friendshipBonus    Int @default(0)
+  gameEnergyRestore  Int @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  inventory     UserInventory[]
+  evolutionReqs PetEvolution[]
+
+  @@index([category, isActive])
+  @@map("items")
+}
+
+model UserInventory {
+  id     String @id @default(cuid())
+  userId String
+  itemId String
+
+  quantity   Int     @default(1)
+  isEquipped Boolean @default(false)
+
+  source     AcquisitionSource @default(SHOP_PURCHASE)
+  acquiredAt DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item Item @relation(fields: [itemId], references: [id])
+
+  @@unique([userId, itemId])
+  @@index([userId])
+  @@map("user_inventory")
+}
+
+// ---------------------------------------------------------------------------
+// Currency — the ledger
+// ---------------------------------------------------------------------------
+
+model CurrencyBalance {
+  id       String       @id @default(cuid())
+  userId   String
+  currency CurrencyType
+  // Cached projection of the ledger. Written ONLY by the transaction service.
+  balance  Int          @default(0)
+
+  lifetimeEarned Int @default(0)
+  lifetimeSpent  Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, currency])
+  @@index([currency, balance])
+  @@map("currency_balances")
+}
+
+model CurrencyTransaction {
+  id        String               @id @default(cuid())
+  userId    String
+  currency  CurrencyType
+  direction TransactionDirection
+  amount    Int
+  category  TransactionCategory
+
+  description   String
+  referenceType String?
+  referenceId   String?
+
+  balanceBefore Int
+  balanceAfter  Int
+
+  // The double-spend guard. Two attempts with the same key produce one row.
+  idempotencyKey String @unique
+
+  createdById String?
+  metadata    Json?
+
+  createdAt DateTime @default(now())
+
+  user      User  @relation("TransactionOwner", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy User? @relation("TransactionActor", fields: [createdById], references: [id])
+
+  @@index([userId, currency, createdAt])
+  @@index([category, createdAt])
+  @@index([createdAt])
+  @@index([referenceType, referenceId])
+  @@map("currency_transactions")
+}
+
+// ---------------------------------------------------------------------------
+// Games
+// ---------------------------------------------------------------------------
+
+model Game {
+  id          String   @id @default(cuid())
+  slug        GameSlug @unique
+  name        String
+  description String
+  imageUrl    String
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  configuration GameConfiguration?
+  sessions      GameSession[]
+  scores        GameScore[]
+  attempts      GameAttempt[]
+  leaderboards  Leaderboard[]
+
+  @@map("games")
+}
+
+model GameConfiguration {
+  id     String @id @default(cuid())
+  gameId String @unique
+
+  energyCost        Int @default(1)
+  dailyAttemptLimit Int @default(10)
+
+  // Reward formula. Kept server-side and admin-editable; never shipped to the client.
+  //   coins  = floor(score * coinsPerScorePoint), capped at dailyCoinCap
+  //   points = floor(score / scorePerRewardPoint), capped at dailyRewardPointCap
+  coinsPerScorePoint  Float @default(0.1)
+  scorePerRewardPoint Int   @default(500)
+
+  dailyCoinCap        Int @default(500)
+  dailyRewardPointCap Int @default(50)
+  xpPerScorePoint     Float @default(0.05)
+
+  // Anti-cheat thresholds.
+  minDurationSeconds Int @default(10)
+  maxValidScore      Int @default(10000)
+  // A score above (elapsedSeconds * maxScorePerSecond) is physically implausible.
+  maxScorePerSecond  Int @default(120)
+
+  isLeaderboardEnabled Boolean @default(true)
+  isActive             Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@map("game_configurations")
+}
+
+model GameSession {
+  id     String @id @default(cuid())
+  userId String
+  gameId String
+
+  // Signed into the session token; a forged or replayed nonce fails verification.
+  nonce  String            @unique
+  status GameSessionStatus @default(ACTIVE)
+
+  startedAt   DateTime  @default(now())
+  submittedAt DateTime?
+  expiresAt   DateTime
+
+  reportedScore    Int?
+  validatedScore   Int?
+  durationSeconds  Int?
+  coinsAwarded     Int  @default(0)
+  pointsAwarded    Int  @default(0)
+  xpAwarded        Int  @default(0)
+
+  rejectionReason String?
+  clientEvents    Json?
+  ipAddress       String?
+  userAgent       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game  Game       @relation(fields: [gameId], references: [id])
+  score GameScore?
+
+  @@index([userId, gameId, createdAt])
+  @@index([status])
+  @@index([createdAt])
+  @@map("game_sessions")
+}
+
+// Only validated sessions produce a GameScore. Leaderboards read from here,
+// never from GameSession.reportedScore.
+model GameScore {
+  id        String @id @default(cuid())
+  userId    String
+  gameId    String
+  sessionId String @unique
+
+  score           Int
+  durationSeconds Int
+  metadata        Json?
+
+  createdAt DateTime @default(now())
+
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game    Game        @relation(fields: [gameId], references: [id])
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([gameId, score])
+  @@index([userId, gameId, score])
+  @@index([createdAt])
+  @@map("game_scores")
+}
+
+// Per-day counters. Cheaper than counting sessions on every lobby render.
+model GameAttempt {
+  id     String   @id @default(cuid())
+  userId String
+  gameId String
+  day    DateTime @db.Date
+
+  attempts      Int @default(0)
+  coinsEarned   Int @default(0)
+  pointsEarned  Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game Game @relation(fields: [gameId], references: [id])
+
+  @@unique([userId, gameId, day])
+  @@index([day])
+  @@map("game_attempts")
+}
+
+// ---------------------------------------------------------------------------
+// Missions & achievements
+// ---------------------------------------------------------------------------
+
+model Mission {
+  id          String           @id @default(cuid())
+  code        String           @unique
+  title       String
+  description String
+  type        MissionType
+  frequency   MissionFrequency @default(DAILY)
+
+  targetValue  Int        @default(1)
+  rewardType   RewardType @default(COINS)
+  rewardAmount Int        @default(10)
+  rewardItemId String?
+  xpReward     Int        @default(5)
+
+  // Optional narrowing, e.g. REACH_SCORE only counts for ENDLESS_RUNNER.
+  gameSlug GameSlug?
+  itemSlug String?
+
+  startsAt DateTime?
+  endsAt   DateTime?
+
+  claimRequired Boolean @default(true)
+  isActive      Boolean @default(true)
+  sortOrder     Int     @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  userMissions UserMission[]
+
+  @@index([type, isActive])
+  @@index([frequency, isActive])
+  @@map("missions")
+}
+
+model UserMission {
+  id        String @id @default(cuid())
+  userId    String
+  missionId String
+
+  // The reset bucket this row belongs to (start of day / start of ISO week).
+  // Combined with the unique index below, this is what makes "one claim per
+  // period" a database guarantee rather than an application hope.
+  periodKey String
+
+  progress Int               @default(0)
+  target   Int
+  status   UserMissionStatus @default(IN_PROGRESS)
+
+  completedAt DateTime?
+  claimedAt   DateTime?
+  expiresAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mission Mission @relation(fields: [missionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, missionId, periodKey])
+  @@index([userId, status])
+  @@map("user_missions")
+}
+
+model Achievement {
+  id          String          @id @default(cuid())
+  code        AchievementCode @unique
+  title       String
+  description String
+  iconUrl     String
+
+  targetValue Int @default(1)
+
+  rewardType   RewardType @default(COINS)
+  rewardAmount Int        @default(0)
+  rewardItemId String?
+  badgeLabel   String?
+  titleLabel   String?
+  xpReward     Int        @default(0)
+
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userAchievements UserAchievement[]
+
+  @@map("achievements")
+}
+
+model UserAchievement {
+  id            String @id @default(cuid())
+  userId        String
+  achievementId String
+
+  progress   Int       @default(0)
+  target     Int       @default(1)
+  unlockedAt DateTime?
+  claimedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+  @@index([userId, unlockedAt])
+  @@map("user_achievements")
+}
+
+model LoginStreak {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  currentStreak Int       @default(0)
+  longestStreak Int       @default(0)
+  totalLogins   Int       @default(0)
+  // The player's local calendar day of the last claimed streak reward.
+  lastClaimDay  String?
+  lastClaimedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("login_streaks")
+}
+
+// ---------------------------------------------------------------------------
+// Rewards & claims
+// ---------------------------------------------------------------------------
+
+model Reward {
+  id          String         @id @default(cuid())
+  slug        String         @unique
+  name        String
+  description String
+  imageUrl    String
+  category    RewardCategory
+
+  pointCost Int
+
+  stockTotal     Int @default(0)
+  stockAvailable Int @default(0)
+  stockReserved  Int @default(0)
+
+  perUserLimit Int  @default(1)
+  dailyLimit   Int? // total claims per day across all users
+
+  startsAt DateTime?
+  expiresAt DateTime?
+
+  collectionMethod   CollectionMethod @default(PHYSICAL_COLLECTION)
+  collectionLocation String?
+  // Validity window of a claim once created, in hours.
+  claimValidHours    Int              @default(168)
+  termsAndConditions String?
+
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  claims            RewardClaim[]
+  stockTransactions RewardStockTransaction[]
+
+  @@index([category, isActive])
+  @@index([isActive, pointCost])
+  @@map("rewards")
+}
+
+model RewardStockTransaction {
+  id       String        @id @default(cuid())
+  rewardId String
+  movement StockMovement
+  quantity Int
+
+  stockBefore Int
+  stockAfter  Int
+
+  reason      String?
+  referenceId String?
+  createdById String?
+
+  createdAt DateTime @default(now())
+
+  reward    Reward @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+  createdBy User?  @relation(fields: [createdById], references: [id])
+
+  @@index([rewardId, createdAt])
+  @@map("reward_stock_transactions")
+}
+
+model RewardClaim {
+  id       String @id @default(cuid())
+  userId   String
+  rewardId String
+
+  pointCost Int
+  // Human-readable fallback for when the camera won't cooperate.
+  claimCode String @unique
+  // HMAC signature over the claim payload. Verified before the DB is even touched.
+  qrToken   String @unique
+
+  status ClaimStatus @default(RESERVED)
+
+  expiresAt DateTime
+
+  collectionLocation String?
+  // Digital voucher code, courier tracking number, etc.
+  fulfilmentDetails  String?
+  fulfilmentNotes    String?
+
+  collectedAt   DateTime?
+  processedById String?
+  cancelledAt   DateTime?
+  cancelReason  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user        User   @relation("ClaimOwner", fields: [userId], references: [id], onDelete: Cascade)
+  reward      Reward @relation(fields: [rewardId], references: [id])
+  processedBy User?  @relation("ClaimProcessor", fields: [processedById], references: [id])
+
+  @@index([userId, status])
+  @@index([status, expiresAt])
+  @@index([rewardId, createdAt])
+  @@map("reward_claims")
+}
+
+// ---------------------------------------------------------------------------
+// Promo codes & referrals
+// ---------------------------------------------------------------------------
+
+model PromoCode {
+  id   String @id @default(cuid())
+  code String @unique
+
+  rewardType   RewardType @default(COINS)
+  rewardAmount Int
+  rewardItemId String?
+
+  maxUses      Int? // null = unlimited
+  usedCount    Int  @default(0)
+  perUserLimit Int  @default(1)
+
+  minPlayerLevel Int @default(1)
+
+  startsAt DateTime?
+  endsAt   DateTime?
+  isActive Boolean   @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  redemptions PromoCodeRedemption[]
+
+  @@index([isActive])
+  @@map("promo_codes")
+}
+
+model PromoCodeRedemption {
+  id          String @id @default(cuid())
+  promoCodeId String
+  userId      String
+
+  rewardAmount Int
+  ipAddress    String?
+
+  createdAt DateTime @default(now())
+
+  promoCode PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([promoCodeId, userId])
+  @@map("promo_code_redemptions")
+}
+
+model Referral {
+  id         String @id @default(cuid())
+  referrerId String
+  // Unique: an account can only ever be referred once, by one person.
+  referredId String @unique
+
+  code   String
+  status ReferralStatus @default(PENDING)
+
+  referrerReward Int @default(0)
+  referredReward Int @default(0)
+
+  qualifiedAt DateTime?
+  rewardedAt  DateTime?
+
+  signupIp     String?
+  deviceHash   String?
+  riskFlagged  Boolean @default(false)
+  riskReason   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  referrer User @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  referred User @relation("Referred", fields: [referredId], references: [id], onDelete: Cascade)
+
+  @@index([referrerId, status])
+  @@index([status])
+  @@map("referrals")
+}
+
+// ---------------------------------------------------------------------------
+// Leaderboards
+// ---------------------------------------------------------------------------
+
+model Leaderboard {
+  id     String            @id @default(cuid())
+  name   String
+  period LeaderboardPeriod
+  scope  LeaderboardScope
+  gameId String?
+
+  // Inclusive start, exclusive end. ALL_TIME uses a wide fixed window.
+  startsAt DateTime
+  endsAt   DateTime
+
+  isActive     Boolean @default(true)
+  isFinalised  Boolean @default(false)
+  finalisedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  game    Game?              @relation(fields: [gameId], references: [id])
+  entries LeaderboardEntry[]
+  prizes  LeaderboardPrize[]
+
+  @@unique([period, scope, gameId, startsAt])
+  @@index([isActive, endsAt])
+  @@map("leaderboards")
+}
+
+model LeaderboardEntry {
+  id            String @id @default(cuid())
+  leaderboardId String
+  userId        String
+
+  score Int @default(0)
+  rank  Int?
+
+  rewardClaimed Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  leaderboard Leaderboard @relation(fields: [leaderboardId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([leaderboardId, userId])
+  @@index([leaderboardId, score])
+  @@map("leaderboard_entries")
+}
+
+model LeaderboardPrize {
+  id            String @id @default(cuid())
+  leaderboardId String
+
+  rankFrom Int
+  rankTo   Int
+
+  rewardType   RewardType @default(REWARD_POINTS)
+  rewardAmount Int
+
+  createdAt DateTime @default(now())
+
+  leaderboard Leaderboard @relation(fields: [leaderboardId], references: [id], onDelete: Cascade)
+
+  @@unique([leaderboardId, rankFrom, rankTo])
+  @@map("leaderboard_prizes")
+}
+
+// ---------------------------------------------------------------------------
+// Engagement & operations
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id     String           @id @default(cuid())
+  userId String
+  type   NotificationType
+
+  title   String
+  body    String
+  linkUrl String?
+  iconKey String?
+
+  isRead Boolean   @default(false)
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
+}
+
+model Announcement {
+  id      String  @id @default(cuid())
+  title   String
+  body    String
+  linkUrl String?
+
+  // null = broadcast to everyone.
+  targetRole Role?
+  isPublished Boolean  @default(false)
+  publishedAt DateTime?
+
+  createdById String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy User @relation(fields: [createdById], references: [id])
+
+  @@index([isPublished, publishedAt])
+  @@map("announcements")
+}
+
+model Event {
+  id          String  @id @default(cuid())
+  slug        String  @unique
+  name        String
+  description String
+  bannerUrl   String?
+
+  startsAt DateTime
+  endsAt   DateTime
+
+  coinMultiplier  Float @default(1.0)
+  pointMultiplier Float @default(1.0)
+  xpMultiplier    Float @default(1.0)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, startsAt, endsAt])
+  @@map("events")
+}
+
+model FraudAlert {
+  id     String         @id @default(cuid())
+  userId String
+  type   FraudAlertType
+  severity FraudSeverity @default(MEDIUM)
+  status   FraudAlertStatus @default(OPEN)
+
+  description String
+  evidence    Json?
+
+  referenceType String?
+  referenceId   String?
+
+  ipAddress String?
+  userAgent String?
+
+  resolvedById String?
+  resolvedAt   DateTime?
+  resolution   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user       User  @relation("FraudSubject", fields: [userId], references: [id], onDelete: Cascade)
+  resolvedBy User? @relation("FraudResolver", fields: [resolvedById], references: [id])
+
+  @@index([status, severity, createdAt])
+  @@index([userId, createdAt])
+  @@map("fraud_alerts")
+}
+
+model AuditLog {
+  id      String      @id @default(cuid())
+  actorId String?
+  action  AuditAction
+
+  targetType String
+  targetId   String?
+
+  oldValue Json?
+  newValue Json?
+
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@index([targetType, targetId])
+  @@map("audit_logs")
+}
+
+model SystemSetting {
+  key         String   @id
+  value       Json
+  description String?
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_settings")
+}
