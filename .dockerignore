@@ -1,0 +1,27 @@
+# The image builds its own dependencies and output; shipping the local copies would
+# bloat the upload and risk baking host-specific binaries into the image.
+node_modules
+.next
+out
+build
+dist
+
+# Secrets must never enter the build context.
+.env
+.env.*
+!env.example
+
+.git
+.github
+.claude
+coverage
+playwright-report
+test-results
+blob-report
+playwright/.cache
+e2e
+tests
+*.log
+.DS_Store
+.vscode
+.idea
