@@ -45,11 +45,20 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Prisma CLI + schema, so the container can run migrations on start.
-COPY --from=builder /app/prisma ./prisma
+# The generated query engine, which the standalone server needs at runtime.
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+
+# The schema + migrations, and a real install of the Prisma CLI so the container can
+# migrate itself on boot.
+#
+# The CLI is installed rather than copied out of the builder: it drags in transitive
+# dependencies (@prisma/config, effect, …) that cherry-picking package directories will
+# never fully satisfy — an earlier attempt to copy `node_modules/prisma` alone crashed
+# the container with "Cannot find module 'effect'". Installing it into its own tree
+# keeps the standalone server's node_modules untouched.
+COPY --from=builder /app/prisma ./prisma
+RUN npm install --no-save --no-audit --no-fund prisma@6 \
+  && chown -R nextjs:nodejs /app/node_modules /app/prisma
 
 USER nextjs
 EXPOSE 3000
@@ -57,8 +66,4 @@ ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
 # `migrate deploy` (not `migrate dev`) — it never prompts and never drops data.
-#
-# The CLI is invoked through its entrypoint rather than via `npx prisma`: the runtime
-# stage copies the prisma package but not `node_modules/.bin`, so the bin shim does
-# not exist here and `npx` would fail with "prisma: not found".
-CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node server.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
