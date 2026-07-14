@@ -155,14 +155,24 @@ export const createFeedingCatch: PhaserGameFactory = async (parent, callbacks) =
       food.setData('kind', kind);
 
       this.physics.add.existing(food);
+
+      // Join the group BEFORE configuring the body. An Arcade Group applies its
+      // `defaults` to every body handed to it — including velocityY: 0 — so a
+      // velocity set beforehand is silently wiped, and the food hangs above the
+      // canvas forever. This ordering, plus the per-frame re-assert in update(),
+      // is what actually makes it fall.
+      this.foods.add(food);
+
+      // Fall speed rises as the clock runs down, so the last fifteen seconds are the
+      // ones that decide the score. Stored on the object because update() re-applies
+      // it every frame rather than trusting it to survive.
+      const progress = 1 - this.timeLeft / ROUND_SECONDS;
+      const fallSpeed = Phaser.Math.Between(170, 240) + progress * 190;
+      food.setData('fallSpeed', fallSpeed);
+
       const body = food.body as Phaser.Physics.Arcade.Body;
       body.setAllowGravity(false);
-      // Fall speed rises as the clock runs down, so the last fifteen seconds are the
-      // ones that decide the score.
-      const progress = 1 - this.timeLeft / ROUND_SECONDS;
-      body.setVelocityY(Phaser.Math.Between(170, 240) + progress * 190);
-
-      this.foods.add(food);
+      body.setVelocityY(fallSpeed);
     }
 
     private catchFood(_pet: unknown, foodObj: unknown) {
@@ -226,6 +236,16 @@ export const createFeedingCatch: PhaserGameFactory = async (parent, callbacks) =
 
       for (const child of this.foods.getChildren()) {
         const food = child as Phaser.GameObjects.Arc;
+
+        // Re-assert the fall speed every frame, the same way the runner drives its
+        // obstacles. Anything that resets a body — a group default, a physics restart,
+        // a pause/resume — cannot leave food frozen in mid-air.
+        const body = food.body as Phaser.Physics.Arcade.Body | null;
+        const fallSpeed = (food.getData('fallSpeed') as number) ?? 200;
+        if (body && body.velocity.y !== fallSpeed) {
+          body.setVelocityY(fallSpeed);
+        }
+
         if (food.y > WORLD.height + 40) {
           const kind = food.getData('kind') as FoodKind;
           // Dropping good food breaks the combo. Dropping rotten food is the correct
