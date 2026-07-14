@@ -57,4 +57,8 @@ ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
 # `migrate deploy` (not `migrate dev`) — it never prompts and never drops data.
-CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
+#
+# The CLI is invoked through its entrypoint rather than via `npx prisma`: the runtime
+# stage copies the prisma package but not `node_modules/.bin`, so the bin shim does
+# not exist here and `npx` would fail with "prisma: not found".
+CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node server.js"]
