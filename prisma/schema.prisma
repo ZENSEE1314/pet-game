@@ -80,6 +80,7 @@ enum TransactionCategory {
   ADMIN_ADJUSTMENT
   SIGNUP_BONUS
   GAME_ENERGY_REFILL
+  MONSTER_UNLOCK_REWARD
 }
 
 enum PetStage {
@@ -136,6 +137,50 @@ enum AcquisitionSource {
 enum GameSlug {
   ENDLESS_RUNNER
   FEEDING_CATCH
+  SUDOKU
+}
+
+enum SudokuDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum SudokuStatus {
+  ACTIVE
+  SOLVED
+  ABANDONED
+  EXPIRED
+}
+
+// The ten elemental families of the monster collection. Element drives palette,
+// aura particles and the signature feature of the procedurally-drawn creature.
+enum MonsterElement {
+  FIRE
+  WATER
+  EARTH
+  STORM
+  NATURE
+  ICE
+  SHADOW
+  LIGHT
+  METAL
+  COSMIC
+}
+
+enum MonsterRarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
+  MYTHIC
+}
+
+enum PuzzlePieceSource {
+  SUDOKU
+  EVENT
+  PROMO
+  ADMIN_GRANT
 }
 
 enum GameSessionStatus {
@@ -270,6 +315,8 @@ enum NotificationType {
   POINT_CAP_REACHED
   REFERRAL_QUALIFIED
   LEVEL_UP
+  PUZZLE_PIECE_EARNED
+  MONSTER_UNLOCKED
 }
 
 enum FraudAlertType {
@@ -353,24 +400,27 @@ model User {
   petActivities      PetActivity[]
   inventory          UserInventory[]
   balances           CurrencyBalance[]
-  transactions       CurrencyTransaction[] @relation("TransactionOwner")
-  actedTransactions  CurrencyTransaction[] @relation("TransactionActor")
+  transactions       CurrencyTransaction[]    @relation("TransactionOwner")
+  actedTransactions  CurrencyTransaction[]    @relation("TransactionActor")
   gameSessions       GameSession[]
   gameScores         GameScore[]
   gameAttempts       GameAttempt[]
+  sudokuGames        SudokuGame[]
+  puzzlePieces       UserPuzzlePiece[]
+  monsters           UserMonster[]
   missions           UserMission[]
   achievements       UserAchievement[]
-  claims             RewardClaim[]         @relation("ClaimOwner")
-  processedClaims    RewardClaim[]         @relation("ClaimProcessor")
+  claims             RewardClaim[]            @relation("ClaimOwner")
+  processedClaims    RewardClaim[]            @relation("ClaimProcessor")
   promoRedemptions   PromoCodeRedemption[]
-  referralsMade      Referral[]            @relation("Referrer")
-  referralReceived   Referral?             @relation("Referred")
+  referralsMade      Referral[]               @relation("Referrer")
+  referralReceived   Referral?                @relation("Referred")
   loginStreak        LoginStreak?
   leaderboardEntries LeaderboardEntry[]
   notifications      Notification[]
-  fraudAlerts        FraudAlert[]          @relation("FraudSubject")
-  resolvedAlerts     FraudAlert[]          @relation("FraudResolver")
-  auditLogs          AuditLog[]            @relation("AuditActor")
+  fraudAlerts        FraudAlert[]             @relation("FraudSubject")
+  resolvedAlerts     FraudAlert[]             @relation("FraudResolver")
+  auditLogs          AuditLog[]               @relation("AuditActor")
   announcements      Announcement[]
   stockTransactions  RewardStockTransaction[]
 
@@ -466,30 +516,30 @@ model Permission {
 // ---------------------------------------------------------------------------
 
 model Profile {
-  id           String  @id @default(cuid())
-  userId       String  @unique
-  username     String  @unique
-  displayName  String
-  avatarUrl    String?
-  phone        String?
-  country      String?
-  timezone     String  @default("Asia/Kuala_Lumpur")
-  bio          String?
+  id          String  @id @default(cuid())
+  userId      String  @unique
+  username    String  @unique
+  displayName String
+  avatarUrl   String?
+  phone       String?
+  country     String?
+  timezone    String  @default("Asia/Kuala_Lumpur")
+  bio         String?
 
-  level     Int @default(1)
-  xp        Int @default(0)
+  level Int @default(1)
+  xp    Int @default(0)
 
   // Game energy: regenerated lazily from `energyUpdatedAt`, never by a cron.
-  gameEnergy          Int      @default(10)
-  gameEnergyUpdatedAt DateTime @default(now())
+  gameEnergy          Int       @default(10)
+  gameEnergyUpdatedAt DateTime  @default(now())
   lastFreeRefillAt    DateTime?
 
   referralCode String  @unique
   referredBy   String?
 
-  notifyMissions     Boolean @default(true)
-  notifyPetCare      Boolean @default(true)
-  notifyRewards      Boolean @default(true)
+  notifyMissions      Boolean @default(true)
+  notifyPetCare       Boolean @default(true)
+  notifyRewards       Boolean @default(true)
   notifyAnnouncements Boolean @default(true)
 
   visitedRewardShopAt DateTime?
@@ -615,11 +665,11 @@ model PetEvolution {
   fromStage PetStage
   toStage   PetStage
 
-  minLevel          Int     @default(1)
-  minAgeHours       Int     @default(0)
-  minFriendship     Int     @default(0)
-  minCareActions    Int     @default(0)
-  requiredItemId    String?
+  minLevel            Int              @default(1)
+  minAgeHours         Int              @default(0)
+  minFriendship       Int              @default(0)
+  minCareActions      Int              @default(0)
+  requiredItemId      String?
   requiredAchievement AchievementCode?
 
   // Reserved for branching paths (e.g. "fire" vs "water" line). One row per branch.
@@ -791,8 +841,8 @@ model GameConfiguration {
   coinsPerScorePoint  Float @default(0.1)
   scorePerRewardPoint Int   @default(500)
 
-  dailyCoinCap        Int @default(500)
-  dailyRewardPointCap Int @default(50)
+  dailyCoinCap        Int   @default(500)
+  dailyRewardPointCap Int   @default(50)
   xpPerScorePoint     Float @default(0.05)
 
   // Anti-cheat thresholds.
@@ -825,12 +875,12 @@ model GameSession {
   submittedAt DateTime?
   expiresAt   DateTime
 
-  reportedScore    Int?
-  validatedScore   Int?
-  durationSeconds  Int?
-  coinsAwarded     Int  @default(0)
-  pointsAwarded    Int  @default(0)
-  xpAwarded        Int  @default(0)
+  reportedScore   Int?
+  validatedScore  Int?
+  durationSeconds Int?
+  coinsAwarded    Int  @default(0)
+  pointsAwarded   Int  @default(0)
+  xpAwarded       Int  @default(0)
 
   rejectionReason String?
   clientEvents    Json?
@@ -881,9 +931,9 @@ model GameAttempt {
   gameId String
   day    DateTime @db.Date
 
-  attempts      Int @default(0)
-  coinsEarned   Int @default(0)
-  pointsEarned  Int @default(0)
+  attempts     Int @default(0)
+  coinsEarned  Int @default(0)
+  pointsEarned Int @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1053,7 +1103,7 @@ model Reward {
   perUserLimit Int  @default(1)
   dailyLimit   Int? // total claims per day across all users
 
-  startsAt DateTime?
+  startsAt  DateTime?
   expiresAt DateTime?
 
   collectionMethod   CollectionMethod @default(PHYSICAL_COLLECTION)
@@ -1201,10 +1251,10 @@ model Referral {
   qualifiedAt DateTime?
   rewardedAt  DateTime?
 
-  signupIp     String?
-  deviceHash   String?
-  riskFlagged  Boolean @default(false)
-  riskReason   String?
+  signupIp    String?
+  deviceHash  String?
+  riskFlagged Boolean @default(false)
+  riskReason  String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1232,9 +1282,9 @@ model Leaderboard {
   startsAt DateTime
   endsAt   DateTime
 
-  isActive     Boolean @default(true)
-  isFinalised  Boolean @default(false)
-  finalisedAt  DateTime?
+  isActive    Boolean   @default(true)
+  isFinalised Boolean   @default(false)
+  finalisedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1253,7 +1303,7 @@ model LeaderboardEntry {
   leaderboardId String
   userId        String
 
-  score Int @default(0)
+  score Int  @default(0)
   rank  Int?
 
   rewardClaimed Boolean @default(false)
@@ -1319,8 +1369,8 @@ model Announcement {
   linkUrl String?
 
   // null = broadcast to everyone.
-  targetRole Role?
-  isPublished Boolean  @default(false)
+  targetRole  Role?
+  isPublished Boolean   @default(false)
   publishedAt DateTime?
 
   createdById String
@@ -1358,10 +1408,10 @@ model Event {
 }
 
 model FraudAlert {
-  id     String         @id @default(cuid())
-  userId String
-  type   FraudAlertType
-  severity FraudSeverity @default(MEDIUM)
+  id       String           @id @default(cuid())
+  userId   String
+  type     FraudAlertType
+  severity FraudSeverity    @default(MEDIUM)
   status   FraudAlertStatus @default(OPEN)
 
   description String
@@ -1420,4 +1470,122 @@ model SystemSetting {
   updatedAt   DateTime @updatedAt
 
   @@map("system_settings")
+}
+
+// ---------------------------------------------------------------------------
+// Monster collection & Sudoku
+// ---------------------------------------------------------------------------
+
+// One of the 50 collectible monsters. Each is a 9-piece (3x3) puzzle; collecting all
+// nine pieces hatches it into the player's collection.
+model Monster {
+  id          String         @id @default(cuid())
+  slug        String         @unique
+  name        String
+  element     MonsterElement
+  rarity      MonsterRarity
+  // Drives the procedurally-drawn creature's silhouette (cat, wolf, dragon, …). The
+  // art is generated from (element, archetype, rarity) so all 50 are consistent and
+  // animated without shipping 50 asset files.
+  archetype   String
+  description String
+  // Optional override: drop an AI-generated transparent PNG here and the collection
+  // renders it instead of the procedural SVG. Null everywhere by default.
+  imageUrl    String?
+  accentColor String         @default("#f59e0b")
+  // How the piece lottery is weighted. Rarer monsters surface their pieces less often.
+  dropWeight  Int            @default(100)
+  sortOrder   Int            @default(0)
+  isActive    Boolean        @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pieces UserPuzzlePiece[]
+  owners UserMonster[]
+
+  @@index([element, rarity])
+  @@index([isActive, sortOrder])
+  @@map("monsters")
+}
+
+// One puzzle piece a player owns for a monster. The unique constraint is the whole
+// anti-duplicate design: a player can hold each of the nine pieces of a monster at
+// most once, enforced by the database rather than by application checks.
+model UserPuzzlePiece {
+  id         String            @id @default(cuid())
+  userId     String
+  monsterId  String
+  pieceIndex Int // 0-8, position in the 3x3 grid
+  source     PuzzlePieceSource @default(SUDOKU)
+
+  acquiredAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  monster Monster @relation(fields: [monsterId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, monsterId, pieceIndex])
+  @@index([userId, monsterId])
+  @@map("user_puzzle_pieces")
+}
+
+// A monster a player has hatched (all nine pieces collected). The unique constraint
+// makes "hatch once" a database guarantee.
+model UserMonster {
+  id        String @id @default(cuid())
+  userId    String
+  monsterId String
+
+  // True until the player has opened the reveal — drives the "NEW!" badge.
+  isNew Boolean @default(true)
+
+  unlockedAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  monster Monster @relation(fields: [monsterId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, monsterId])
+  @@index([userId, unlockedAt])
+  @@map("user_monsters")
+}
+
+// A single game of Sudoku.
+//
+// The SOLUTION is stored server-side and is never sent to the client until the game
+// is solved — the player receives only `puzzle`. Validation compares their submission
+// to `solution` here, so the answer key never crosses the trust boundary. A signed
+// nonce (same mechanism as mini-game sessions) proves the solve request refers to a
+// session this server actually issued.
+model SudokuGame {
+  id         String           @id @default(cuid())
+  userId     String
+  difficulty SudokuDifficulty
+  status     SudokuStatus     @default(ACTIVE)
+
+  // 81-char strings, row-major, '0' = blank. The solution is server-only.
+  puzzle   String
+  solution String
+  seed     Int
+
+  nonce     String @unique
+  signature String
+
+  hintsUsed       Int  @default(0)
+  mistakes        Int  @default(0)
+  durationSeconds Int?
+
+  // What the win awarded, recorded for history and to make the solve idempotent.
+  awardedMonsterId  String?
+  awardedPieceIndex Int?
+  completedMonster  Boolean @default(false)
+
+  startedAt DateTime  @default(now())
+  solvedAt  DateTime?
+  expiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([startedAt])
+  @@map("sudoku_games")
 }

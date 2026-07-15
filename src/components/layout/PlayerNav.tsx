@@ -20,6 +20,7 @@ import {
   Ticket,
   Shield,
   ScanLine,
+  Sparkles,
 } from 'lucide-react';
 import type { Role } from '@prisma/client';
 import { cn } from '@/lib/utils';
@@ -40,6 +41,7 @@ const PRIMARY = [
 ];
 
 const SECONDARY = [
+  { href: '/collection', label: 'Monster collection', icon: Sparkles },
   { href: '/inventory', label: 'Inventory', icon: Backpack },
   { href: '/shop', label: 'Item shop', icon: ShoppingBag },
   { href: '/achievements', label: 'Achievements', icon: Trophy },

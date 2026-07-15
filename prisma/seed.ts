@@ -33,6 +33,7 @@ import {
   LeaderboardScope,
 } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { MONSTERS, ELEMENT_THEME, RARITY_META } from '../src/lib/monsters';
 
 const prisma = new PrismaClient();
 
@@ -303,6 +304,29 @@ async function main() {
         maxScorePerSecond: 100,
       },
     },
+    {
+      slug: GameSlug.SUDOKU,
+      name: 'Sudoku Quest',
+      description: 'Solve the number puzzle to win a monster puzzle piece. Collect 9 to hatch a monster!',
+      imageUrl: '/assets/games/sudoku.svg',
+      sortOrder: 3,
+      // Sudoku is scored on solve, not on points, so most fields here are unused by
+      // its flow -- only energyCost and dailyAttemptLimit matter. The others satisfy
+      // the shared GameConfiguration shape.
+      config: {
+        energyCost: 1,
+        dailyAttemptLimit: 15,
+        coinsPerScorePoint: 0,
+        scorePerRewardPoint: 1,
+        dailyCoinCap: 0,
+        dailyRewardPointCap: 0,
+        xpPerScorePoint: 0,
+        minDurationSeconds: 0,
+        maxValidScore: 1,
+        maxScorePerSecond: 1,
+        isLeaderboardEnabled: false,
+      },
+    },
   ];
 
   const games = [];
@@ -327,7 +351,63 @@ async function main() {
 
     games.push(game);
   }
-  console.info('[ok] Games (2) + configuration');
+  console.info('[ok] Games (3) + configuration');
+
+  // --- Monster collection (50) ----------------------------------------------
+
+  for (let i = 0; i < MONSTERS.length; i += 1) {
+    const monster = MONSTERS[i]!;
+    const theme = ELEMENT_THEME[monster.element];
+    const rarityMeta = RARITY_META[monster.rarity];
+
+    await prisma.monster.upsert({
+      where: { slug: monster.slug },
+      create: {
+        slug: monster.slug,
+        name: monster.name,
+        element: monster.element,
+        rarity: monster.rarity,
+        archetype: monster.archetype,
+        description: monster.description,
+        accentColor: theme.aura,
+        dropWeight: rarityMeta.dropWeight,
+        sortOrder: i,
+      },
+      // Converge existing rows to the catalogue so art/lore fixes propagate on reseed.
+      update: {
+        name: monster.name,
+        element: monster.element,
+        rarity: monster.rarity,
+        archetype: monster.archetype,
+        description: monster.description,
+        accentColor: theme.aura,
+        dropWeight: rarityMeta.dropWeight,
+        sortOrder: i,
+        isActive: true,
+      },
+    });
+  }
+  console.info(`[ok] Monster collection (${MONSTERS.length})`);
+
+  // Give player 1 a nearly-complete monster so the hatch flow is testable in one win:
+  // eight of the nine pieces of the first monster.
+  const starterMonster = await prisma.monster.findFirst({ orderBy: { sortOrder: 'asc' } });
+  if (starterMonster) {
+    for (let pieceIndex = 0; pieceIndex < 8; pieceIndex += 1) {
+      await prisma.userPuzzlePiece.upsert({
+        where: {
+          userId_monsterId_pieceIndex: {
+            userId: player1.id,
+            monsterId: starterMonster.id,
+            pieceIndex,
+          },
+        },
+        create: { userId: player1.id, monsterId: starterMonster.id, pieceIndex },
+        update: {},
+      });
+    }
+    console.info('[ok] Starter puzzle pieces (8/9 of first monster for player 1)');
+  }
 
   // --- Missions (5 daily + 5 weekly) ---------------------------------------
 

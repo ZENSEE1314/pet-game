@@ -44,6 +44,28 @@ export function verifyGameSession(payload: GameSessionPayload, signature: string
   return safeEqual(signGameSession(payload), signature);
 }
 
+// --- Sudoku sessions -------------------------------------------------------
+
+export interface SudokuPayload {
+  gameId: string;
+  userId: string;
+  nonce: string;
+  seed: number;
+}
+
+function sudokuPayloadString(p: SudokuPayload): string {
+  return [p.gameId, p.userId, p.nonce, String(p.seed)].join('|');
+}
+
+/** Same trust model as game sessions: proves the solve refers to a puzzle we issued. */
+export function signSudoku(payload: SudokuPayload): string {
+  return sign(env.GAME_SESSION_SECRET, sudokuPayloadString(payload));
+}
+
+export function verifySudoku(payload: SudokuPayload, signature: string): boolean {
+  return safeEqual(signSudoku(payload), signature);
+}
+
 // --- Reward claim QR tokens ------------------------------------------------
 
 export interface ClaimTokenPayload {

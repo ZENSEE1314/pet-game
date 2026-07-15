@@ -50,6 +50,7 @@ interface Lobby {
 const ROUTE_BY_SLUG: Record<GameSlug, string> = {
   ENDLESS_RUNNER: '/games/endless-runner',
   FEEDING_CATCH: '/games/feeding-catch',
+  SUDOKU: '/games/sudoku',
 };
 
 export default function GameLobbyPage() {
@@ -190,37 +191,50 @@ export default function GameLobbyPage() {
                 </div>
               </div>
 
-              <div className="space-y-1.5 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
-                    <Coins className="h-3 w-3" aria-hidden />
-                    Coins today
+              {/* Sudoku doesn't pay coins/points — it drops monster puzzle pieces —
+                  so its caps are zero. Show its own reward line instead of dividing
+                  by zero on the score-based bars. */}
+              {game.slug === 'SUDOKU' ? (
+                <div className="rounded-lg bg-secondary px-3 py-2 text-xs">
+                  <span className="flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
+                    <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                    Win a monster puzzle piece
                   </span>
-                  <span className="tabular-nums">
-                    {game.coinsEarnedToday} / {game.rewardInfo.dailyCoinCap}
-                  </span>
+                  <p className="mt-0.5 text-muted-foreground">Collect 9 to hatch a monster.</p>
                 </div>
-                <Progress
-                  value={(game.coinsEarnedToday / game.rewardInfo.dailyCoinCap) * 100}
-                  className="h-1.5"
-                  indicatorClassName="bg-amber-500"
-                />
+              ) : (
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                      <Coins className="h-3 w-3" aria-hidden />
+                      Coins today
+                    </span>
+                    <span className="tabular-nums">
+                      {game.coinsEarnedToday} / {game.rewardInfo.dailyCoinCap}
+                    </span>
+                  </div>
+                  <Progress
+                    value={(game.coinsEarnedToday / game.rewardInfo.dailyCoinCap) * 100}
+                    className="h-1.5"
+                    indicatorClassName="bg-amber-500"
+                  />
 
-                <div className="flex items-center justify-between pt-1">
-                  <span className="flex items-center gap-1 text-purple-600 dark:text-purple-400">
-                    <Sparkles className="h-3 w-3" aria-hidden />
-                    Points today
-                  </span>
-                  <span className="tabular-nums">
-                    {game.pointsEarnedToday} / {game.rewardInfo.dailyRewardPointCap}
-                  </span>
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="flex items-center gap-1 text-purple-600 dark:text-purple-400">
+                      <Sparkles className="h-3 w-3" aria-hidden />
+                      Points today
+                    </span>
+                    <span className="tabular-nums">
+                      {game.pointsEarnedToday} / {game.rewardInfo.dailyRewardPointCap}
+                    </span>
+                  </div>
+                  <Progress
+                    value={(game.pointsEarnedToday / game.rewardInfo.dailyRewardPointCap) * 100}
+                    className="h-1.5"
+                    indicatorClassName="bg-purple-500"
+                  />
                 </div>
-                <Progress
-                  value={(game.pointsEarnedToday / game.rewardInfo.dailyRewardPointCap) * 100}
-                  className="h-1.5"
-                  indicatorClassName="bg-purple-500"
-                />
-              </div>
+              )}
 
               <div className="mt-auto flex gap-2 pt-2">
                 <Button

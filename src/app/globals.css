@@ -117,6 +117,58 @@ canvas {
 
 /* Respect the user's motion preference. Reward celebrations are delightful; making
    someone motion-sick is not. */
+/* --- Monster creature idle animations -------------------------------------
+   Kept out of the Tailwind config because they're only used by MonsterCreature,
+   and grouping them here keeps the creature's motion legible in one place. All of
+   them animate transform/opacity only, so they stay cheap even with dozens of
+   monsters on the collection grid. */
+
+@keyframes mon-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes mon-breathe {
+  0%, 100% { transform: scale(1, 1); }
+  50% { transform: scale(1.03, 0.97); }
+}
+@keyframes mon-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  96% { transform: scaleY(0.1); }
+}
+@keyframes mon-sway {
+  0%, 100% { transform: rotate(-6deg); }
+  50% { transform: rotate(6deg); }
+}
+@keyframes mon-drift {
+  0% { transform: translateY(8px) scale(0.7); opacity: 0; }
+  25% { opacity: 0.9; }
+  100% { transform: translateY(-42px) scale(1.1); opacity: 0; }
+}
+@keyframes mon-twinkle {
+  0%, 100% { opacity: 0.25; transform: scale(0.7); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+@keyframes mon-glow {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.7; }
+}
+
+.mon-float { animation: mon-float 3.2s ease-in-out infinite; transform-origin: center; }
+.mon-breathe { animation: mon-breathe 2.6s ease-in-out infinite; transform-origin: center bottom; }
+.mon-blink { animation: mon-blink 4.5s ease-in-out infinite; transform-origin: center; }
+.mon-sway { animation: mon-sway 3.6s ease-in-out infinite; }
+.mon-drift { animation: mon-drift 2.8s ease-in infinite; }
+.mon-twinkle { animation: mon-twinkle 2s ease-in-out infinite; transform-origin: center; }
+.mon-glow { animation: mon-glow 3s ease-in-out infinite; }
+
+/* Reveal flourish when a monster is hatched. */
+@keyframes mon-hatch {
+  0% { transform: scale(0.3) rotate(-12deg); opacity: 0; }
+  60% { transform: scale(1.08) rotate(4deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+.mon-hatch { animation: mon-hatch 0.7s cubic-bezier(0.16, 1, 0.3, 1); }
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -152,6 +152,27 @@ export const submitScoreSchema = z.object({
     .optional(),
 });
 
+// --- Sudoku -----------------------------------------------------------------
+
+export const startSudokuSchema = z.object({
+  difficulty: z.enum(['EASY', 'MEDIUM', 'HARD']).default('EASY'),
+});
+
+/**
+ * The submitted grid: 81 digits, 0 for blank. The client sends its answer; the server
+ * compares it to the solution it alone holds. There is no "score" or reward field —
+ * the only thing the client states is the grid.
+ */
+export const submitSudokuSchema = z.object({
+  gameId: z.string().cuid(),
+  signature: z.string().min(1),
+  grid: z.array(z.number().int().min(0).max(9)).length(81),
+});
+
+export const markMonstersSeenSchema = z.object({
+  monsterIds: z.array(z.string().cuid()).optional(),
+});
+
 // --- Missions ---------------------------------------------------------------
 
 export const claimMissionSchema = z.object({ userMissionId: z.string().cuid() });

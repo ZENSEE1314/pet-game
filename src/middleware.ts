@@ -10,6 +10,7 @@ const PLAYER_PREFIXES = [
   '/inventory',
   '/shop',
   '/games',
+  '/collection',
   '/missions',
   '/achievements',
   '/leaderboards',
